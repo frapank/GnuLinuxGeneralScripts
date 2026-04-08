@@ -225,6 +225,33 @@ EOF
     fi
 }
 
+linux_lts() {
+    if confirm "Install linux-lts? (raccomanded)"; then
+        install_package linux-lts
+        install_package linux-lts-headers
+        if confirm "Remove old kernels?"; then
+            mkdir -p "$(dirname "$XBPS_IGNORE_CONF")"
+            if [[ -f $XBPS_IGNORE_CONF ]]; then
+                cp -a "$XBPS_IGNORE_CONF" "${XBPS_IGNORE_CONF}.$(date +%s).bak"
+            fi
+
+            touch "$XBPS_IGNORE_CONF"
+            for pkg in linux linux-headers; do
+                if ! grep -qxF "ignorepkg=$pkg" "$XBPS_IGNORE_CONF"; then
+                    echo "ignorepkg=$pkg" >> "$XBPS_IGNORE_CONF"
+                fi
+
+                if xbps-query -S "$pkg" >/dev/null 2>&1; then
+                    log_info "Removing $pkg..."
+                    xbps-remove -y "$pkg"
+                else
+                    log_info "$pkg not installed, skipping"
+                fi
+            done
+        fi
+    fi
+}
+
 app_armor() {
     if apparmor_status >/dev/null; then
         log_info "apparmor already enabled"       
@@ -246,6 +273,7 @@ main() {
         setup_firewall
         configure_network
         replace_sudo_with_doas
+        linux_lts
         app_armor
     fi
 }
