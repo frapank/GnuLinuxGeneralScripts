@@ -6,6 +6,7 @@ SYSCTL_CONF="/etc/sysctl.d/99-custom-hardening.conf"
 DOAS_CONF="/etc/doas.conf"
 XBPS_IGNORE_CONF="/etc/xbps.d/ignore.conf"
 NM_MAC_RANDOMIZE_CONF="/etc/NetworkManager/conf.d/00-macrandomize.conf"
+SU_CONF="/etc/pam.d/su"
 LOG_FILE="/var/log/hardening.log"
 
 log() {
@@ -225,6 +226,31 @@ EOF
     fi
 }
 
+restrict_su() {
+    if confirm "Restrict su? (recommended)"; then
+        log_info "Creating $SU_CONF backup file..."
+        cp -a "$SU_CONF" "${SU_CONF}.$(date +%s).bak"
+
+        sed -i '/^[[:space:]]*auth[[:space:]]\+required[[:space:]]\+pam_wheel\.so/d' "$SU_CONF"
+
+        if confirm "Disable su? (y=disable | n=restrict to wheel)"; then
+            if grep -q 'pam_rootok\.so' "$SU_CONF"; then
+                sed -i '/pam_rootok\.so/a auth required pam_wheel.so deny' "$SU_CONF"
+            else
+                sed -i '1i auth required pam_wheel.so deny' "$SU_CONF"
+            fi
+            log_success "Command su disabled!"
+        else
+            if grep -q 'pam_rootok\.so' "$SU_CONF"; then
+                sed -i '/pam_rootok\.so/a auth required pam_wheel.so use_uid' "$SU_CONF"
+            else
+                sed -i '1i auth required pam_wheel.so use_uid' "$SU_CONF"
+            fi
+            log_success "Command su restricted to wheel group!"
+        fi
+    fi
+}
+
 linux_lts() {
     if confirm "Install linux-lts? (raccomanded)"; then
         install_package linux-lts
@@ -273,6 +299,7 @@ main() {
         setup_firewall
         configure_network
         replace_sudo_with_doas
+        restrict_su
         linux_lts
         app_armor
     fi
